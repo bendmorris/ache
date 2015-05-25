@@ -1,10 +1,16 @@
 from collections import defaultdict
 from itertools import chain
+import argparse
 from parser import parse
 
 
-
 __version__ = '0.1.0'
+
+parser = argparse.ArgumentParser(description='Ache: make for asset pipelines.')
+parser.add_argument('files', nargs='*', default=['ache.xml'], help='pipeline XML files to process (defaults to local ache.xml)')
+parser.add_argument('--verbose', '-v', action='store_true', default=False, help='extra output for debugging')
+parser.add_argument('--test', '-t', action='store_true', default=False, help="display but don't execute <exec> tags")
+args = parser.parse_args()
 
 class Rule(object):
     builtin = False
@@ -19,7 +25,11 @@ class Rule(object):
             r = Rule(node.tag)
 
         for key, val in node.attrib.iteritems():
-            r.attributes[key] = parse(val)
+            try:
+                r.attributes[key] = parse(val)
+            except Exception as e:
+                print val
+                raise e
 
         for child in node:
             child_rule = Rule.parse(child, builtin_rules)
@@ -35,14 +45,22 @@ class Rule(object):
         self.required = set()
         self.parent = None
 
+    def all_attributes(self, seen=None):
+        if seen is None:
+            seen = set()
+
+        for a in self.attributes:
+            if not a in seen:
+                yield a
+            seen.add(a)
+
+        if not self.parent is None:
+            for a in self.parent.all_attributes(seen):
+                yield a
+
     def attr(self, a, context):
         """Evaluate a variable in the given context."""
-        if a in self.attributes:
-            return self.attributes[a].eval(context)
-        elif self.parent is not None:
-            return self.parent.attr(a, context)
-        else:
-            return None
+        return context.get(a, None)
 
     def match(self, node):
         """Returns True if this rule matches the given node."""
@@ -50,15 +68,22 @@ class Rule(object):
 
     def execute(self, node, context, rules):
         # bind attribute values
-        for key, val in node.attrib.iteritems():
-            if key in self.attributes:
-                self.attributes[key].bind(val, context)
+        for key in self.attributes:
+            a = self.attributes[key]
+            if key in node.attrib:
+                self.attributes[key].bind(node.attrib[key], context)
+
+        # bind default values for missing attributes
+        for key in self.attributes:
+            if not key in node.attrib:
+                self.attributes[key].bind_default(context)
 
         return self.execute_children(node, context, rules)
 
     def execute_children(self, node, context, rules):
         # evaluate child nodes
         remaining = list(node)
+        base_context = context
 
         result = False
 
@@ -66,20 +91,23 @@ class Rule(object):
             if rule.builtin:
                 # builtin nodes match against the current node
                 if rule.match(node):
-                    context = {k:v for (k,v) in context.iteritems()}
+                    context = {k:v for (k,v) in base_context.iteritems()}
                     # bind attributes
                     if rule.execute(node, context, rules):
                         result = True
 
             else:
                 # other nodes try to match against child nodes
+                to_remove = set()
                 for child in remaining:
                     if rule.match(child):
-                        context = {k:v for (k,v) in context.iteritems()}
+                        context = {k:v for (k,v) in base_context.iteritems()}
                         # bind attributes
                         if rule.execute(child, context, rules):
                             result = True
-                        remaining.remove(child)
+                        to_remove.add(child)
+                for r in to_remove:
+                    remaining.remove(r)
 
         return result
 

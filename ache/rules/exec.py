@@ -1,10 +1,10 @@
 import os
 import re
 import subprocess
-from ache import Rule
+from ache import Rule, args
 
 
-variable = re.compile("\$[A-Za-z0-9]+")
+variable = re.compile("\{\$([A-Za-z0-9]+)\}")
 
 class Exec(Rule):
     """Execute one or more shell commands."""
@@ -17,18 +17,20 @@ class Exec(Rule):
 
     def execute(self, node, context, rules):
         expr = self.format_expr(context)
+        if args.verbose:
+            print context
         print expr
-        subprocess.call(expr, shell=True)
+        if not args.test:
+            subprocess.call(expr, shell=True)
         return True
 
     def format_expr(self, context):
         expr = self.expr
         vars = set(variable.findall(expr))
         for var in vars:
-            varname = var.lstrip('$')
             expr = expr.replace(
-                var,
-                context[varname] if varname in context else self.attr(var.lstrip('$'), context)
+                '{$%s}' % var,
+                self.attr(var, context)
             )
 
         return expr

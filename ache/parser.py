@@ -9,14 +9,18 @@ class Variable:
     def bind(self, value, context):
         context[self.name] = value
 
+    def bind_default(self, context):
+        if self.default is not None:
+            context[self.name] = self.default.eval(context)
+
     def eval(self, context=None):
-        return context.get(self.name, self.default.eval(context) if not self.default is None else None)
+        return context.get(self.name, context.get(self.default, None))
 
     def __str__(self):
         if self.default is None:
             return '$%s' % self.name
         else:
-            return '$%s | %s' % (self.name, self.default)
+            return '$%s | $%s' % (self.name, self.default)
     def __repr__(self): return str(self)
 
 
@@ -25,6 +29,9 @@ class Literal:
         self.expr = expr
 
     def bind(self, value, context):
+        pass
+
+    def bind_default(self, context):
         pass
 
     def eval(self, context=None):

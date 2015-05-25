@@ -1,6 +1,6 @@
 from collections import defaultdict
 import xml.etree.cElementTree as ET
-from __init__ import Rule
+from __init__ import Rule, args
 from rules import builtin_rules
 
 
@@ -16,28 +16,37 @@ def process_file(input_file):
         if child.tag == 'rules':
             # define new rules
             for rule in child:
-                rules[rule.tag].append(Rule.parse(rule, builtin_rules))
+                try:
+                    parsed = Rule.parse(rule, builtin_rules)
+                except Exception as e:
+                    print ET.tostring(rule)
+                    raise e
+                rules[rule.tag].append(parsed)
 
         else:
             # execute the first matching rule definition, if any
             if child.tag in rules:
+                matched = False
                 for rule in rules[child.tag]:
                     if rule.match(child):
+                        if args.verbose:
+                            print '\n** Rule matched:', rule
+                            print ET.tostring(child)
                         context = {}
                         matches += 1
                         if rule.execute(child, context, rules):
                             executions += 1
+                        matched = True
                         break
+
+                if not matched:
+                    print '\n*** NO MATCH FOUND: ', ET.tostring(child)
 
     print "*** Finished ***\n- Evaluated %s rules.\n- Found %s matching assets.\n- Executed %s actions." % (len(rules), matches, executions)
 
 
 def run():
     import argparse
-
-    parser = argparse.ArgumentParser(description='Ache: make for asset pipelines.')
-    parser.add_argument('files', nargs='+', help='pipeline XML files to process')
-    args = parser.parse_args()
 
     for filename in args.files:
         with open(filename) as input_file:

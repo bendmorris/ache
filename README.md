@@ -11,7 +11,7 @@ things: **rules** and **actions**. Here's a simple example:
     <pipeline>
         <rules>
             <print text="$txt">
-                <exec>echo $txt</exec>
+                <exec>echo {$txt}</exec>
             </print>
         </rules>
     
@@ -37,8 +37,8 @@ A somewhat more involved example:
                 <png path="$pngPath" w="$w" h="$h | $w">
                     <depends source="$svgPath" target="$pngPath">
                         <exec>
-                            inkscape -e $pngPath --export-width=$w --export-height=$h $svgPath
-                            python -m alpha_bandaid $pngPath
+                            inkscape -e {$pngPath} --export-width={$w} --export-height={$h} {$svgPath}
+                            python -m alpha_bandaid {$pngPath}
                         </exec>
                     </depends>
                 </png>
